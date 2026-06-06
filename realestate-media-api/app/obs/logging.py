@@ -19,9 +19,10 @@ try:  # python-json-logger >= 3 (modern path)
 except ImportError:  # pragma: no cover - older fallback
     from pythonjsonlogger.jsonlogger import JsonFormatter
 
-# ── Logging context (set via app.obs.spans.set_job_context) ────────────────────
+# ── Logging context (set via app.obs.spans.set_job_context / app.deps auth) ────
 job_id_var: ContextVar[str | None] = ContextVar("job_id", default=None)
 ratio_var: ContextVar[str | None] = ContextVar("ratio", default=None)
+member_id_var: ContextVar[str | None] = ContextVar("member_id", default=None)
 
 # Python level name -> Google Cloud Logging severity.
 _SEVERITY_MAP: dict[str, str] = {
@@ -59,6 +60,8 @@ class ContextFilter(logging.Filter):
             record.job_id = job_id_var.get()
         if not hasattr(record, "ratio"):
             record.ratio = ratio_var.get()
+        if not hasattr(record, "member_id"):
+            record.member_id = member_id_var.get()
         return True
 
 
