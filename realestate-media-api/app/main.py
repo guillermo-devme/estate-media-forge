@@ -108,7 +108,7 @@ _OPENAPI_TAGS = [
         "description": "Submit a full 3-ratio media kit (upscale → expand → i2v).",
     },
     {"name": "upscale", "description": "Submit a standalone upscale job."},
-    {"name": "video", "description": "Submit a standalone image-to-video job."},
+    {"name": "image-to-video", "description": "Submit a standalone image-to-video job."},
     {"name": "jobs", "description": "Poll job status (ownership-enforced) + client_ref lookup."},
     {"name": "metrics", "description": "Lightweight operational counters."},
     {"name": "health", "description": "Liveness + readiness probes (no auth)."},

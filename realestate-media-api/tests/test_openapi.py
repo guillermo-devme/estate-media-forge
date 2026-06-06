@@ -40,7 +40,7 @@ def test_all_tags_present(schema):
         "pricing",
         "media-kit",
         "upscale",
-        "video",
+        "image-to-video",
         "jobs",
         "metrics",
         "health",
