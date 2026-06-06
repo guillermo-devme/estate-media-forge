@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     # kept here for parity with the config diagram / any local reconciliation use.
     hold_ttl_seconds: int = Field(default=900, validation_alias="HOLD_TTL_SECONDS")
 
+    # Optional JSON overriding the provider cost table (see app/pricing.py), e.g.
+    # '{"upscale": 0.06, "outpaint": 0.045, "i2v": 0.68}'. Lets ops correct fal
+    # costs without a code change. USD stays server-side.
+    pricing_json: str | None = Field(default=None, validation_alias="PRICING_JSON")
+
     # ── Observability ────────────────────────────────────────────────────────────
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
     langsmith_api_key: str | None = Field(default=None, validation_alias="LANGSMITH_API_KEY")
