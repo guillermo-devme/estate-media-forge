@@ -38,26 +38,28 @@ from __future__ import annotations
 import json
 import math
 from decimal import Decimal
-from enum import Enum
 from functools import lru_cache
 
 from app.config import get_settings
+from app.schemas.enums import FalStage
+from app.schemas.enums import ServiceType as Service
 
-
-class FalStage(str, Enum):
-    """A single fal.ai pipeline stage (also the COST_TABLE / MODEL_REGISTRY key)."""
-
-    UPSCALE = "upscale"
-    OUTPAINT = "outpaint"
-    I2V = "i2v"
-
-
-class Service(str, Enum):
-    """A user-facing priced service."""
-
-    UPSCALE = "upscale"
-    IMAGE_TO_VIDEO = "image_to_video"
-    MEDIA_KIT = "media_kit"
+# ``Service`` is an alias of the canonical ``ServiceType`` enum (app.schemas.enums),
+# kept for the pricing-domain naming used throughout this module and its tests.
+__all__ = [
+    "FalStage",
+    "Service",
+    "COST_TABLE",
+    "DEFAULT_COST_USD",
+    "DEFAULT_RATIOS",
+    "get_cost_table",
+    "raw_cost_usd",
+    "apply_margin",
+    "usd_to_credits",
+    "ratio_credits",
+    "quote_credits",
+    "allowance",
+]
 
 
 # Representative per-unit provider cost in USD. Derived from verified fal pricing
