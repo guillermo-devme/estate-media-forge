@@ -329,5 +329,6 @@ class WorkerSettings:
     max_jobs = 20
     job_timeout = 1800  # 30 min ceiling per job
     keep_result = 3600  # keep ARQ result 1h
+    health_check_interval = 30  # worker health record cadence (seconds)
     on_startup = on_startup
     on_shutdown = on_shutdown

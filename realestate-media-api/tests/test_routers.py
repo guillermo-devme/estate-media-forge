@@ -97,6 +97,12 @@ def client(monkeypatch):
         app.state.enqueue_calls.append((service, job_id))
 
     app.state.enqueue = fake_enqueue
+    app.state.queue_depth_value = 0
+
+    async def fake_queue_depth():
+        return app.state.queue_depth_value
+
+    app.state.queue_depth = fake_queue_depth
 
     class FakeArqPool:
         async def queued_jobs(self):
@@ -252,3 +258,35 @@ def test_metrics_lite(client):
     data = resp.json()
     assert set(data) == {"queue_depth", "active_jobs", "fal_semaphore", "refund_failures"}
     assert set(data["fal_semaphore"]) == {"limit", "in_use", "available"}
+
+
+def test_backpressure_returns_429_with_retry_after(client):
+    # Simulate a full queue (default MAX_QUEUE_DEPTH = 500).
+    client.app.state.queue_depth_value = 500
+    body = _media_kit_body(client_ref="bp_1")
+    resp = client.post("/v1/media-kit", content=body, headers=_sign(body, "mem_1"))
+    assert resp.status_code == 429
+    assert resp.headers["Retry-After"] == "5"
+    # No job created, nothing enqueued.
+    assert client.app.state.enqueue_calls == []
+
+
+def test_backpressure_does_not_block_existing_job_retry(client):
+    body = _media_kit_body(client_ref="bp_2")
+    first = client.post("/v1/media-kit", content=body, headers=_sign(body, "mem_1"))
+    assert first.status_code == 202
+
+    # Queue fills up; a retry for the SAME client_ref still resolves (no shed).
+    client.app.state.queue_depth_value = 500
+    second = client.post("/v1/media-kit", content=body, headers=_sign(body, "mem_1"))
+    assert second.status_code == 202
+    assert second.json()["job_id"] == first.json()["job_id"]
+
+
+def test_many_submits_all_accept_fast(client):
+    # Fast path: 100 distinct submits all 202 (no fal in the request thread).
+    for i in range(100):
+        body = _media_kit_body(client_ref=f"burst_{i}")
+        resp = client.post("/v1/media-kit", content=body, headers=_sign(body, "mem_1"))
+        assert resp.status_code == 202
+    assert len(client.app.state.enqueue_calls) == 100

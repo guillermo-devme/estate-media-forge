@@ -43,3 +43,12 @@ async def enqueue_job(service: str, job_id: str):
         raise ValueError(f"no worker function for service {service!r}")
     pool = await get_arq_pool()
     return await pool.enqueue_job(function_name, job_id)
+
+
+async def queue_depth() -> int:
+    """Current ARQ queue depth (best-effort; 0 if unavailable)."""
+    pool = await get_arq_pool()
+    try:
+        return len(await pool.queued_jobs())
+    except Exception:  # noqa: BLE001 - backpressure check must not crash submits
+        return 0

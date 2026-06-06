@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.jobs.enqueue import close_arq_pool, enqueue_job, get_arq_pool
+from app.jobs.enqueue import close_arq_pool, enqueue_job, get_arq_pool, queue_depth
 from app.jobs.store import JobStore
 from app.obs.logging import configure_logging, get_logger
 from app.providers.wix_client import WixRefundClient
@@ -109,6 +109,7 @@ async def lifespan(app: FastAPI):
     app.state.refund_client = WixRefundClient()
     app.state.arq_pool = await get_arq_pool()
     app.state.enqueue = enqueue_job
+    app.state.queue_depth = queue_depth
 
     _logger.info("app.startup")
     try:

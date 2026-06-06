@@ -17,7 +17,7 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 
 from app.deps import Auth
-from app.routers._shared import EnqueueDep, StoreDep, UsageDep, submit_job
+from app.routers._shared import EnqueueDep, QueueDepthDep, StoreDep, UsageDep, submit_job
 from app.schemas.enums import ServiceType
 from app.schemas.requests import MediaKitRequest
 from app.schemas.responses import JobAccepted
@@ -39,6 +39,7 @@ async def submit_media_kit(
     store: StoreDep,
     usage: UsageDep,
     enqueue: EnqueueDep,
+    queue_depth: QueueDepthDep,
 ) -> JobAccepted:
     return await submit_job(
         service=ServiceType.MEDIA_KIT,
@@ -47,4 +48,5 @@ async def submit_media_kit(
         store=store,
         usage=usage,
         enqueue=enqueue,
+        queue_depth=queue_depth,
     )

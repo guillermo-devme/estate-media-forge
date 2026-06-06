@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 
 from app.deps import Auth
-from app.routers._shared import EnqueueDep, StoreDep, UsageDep, submit_job
+from app.routers._shared import EnqueueDep, QueueDepthDep, StoreDep, UsageDep, submit_job
 from app.schemas.enums import ServiceType
 from app.schemas.requests import ImageToVideoRequest
 from app.schemas.responses import JobAccepted
@@ -27,6 +27,7 @@ async def submit_image_to_video(
     store: StoreDep,
     usage: UsageDep,
     enqueue: EnqueueDep,
+    queue_depth: QueueDepthDep,
 ) -> JobAccepted:
     return await submit_job(
         service=ServiceType.IMAGE_TO_VIDEO,
@@ -35,4 +36,5 @@ async def submit_image_to_video(
         store=store,
         usage=usage,
         enqueue=enqueue,
+        queue_depth=queue_depth,
     )

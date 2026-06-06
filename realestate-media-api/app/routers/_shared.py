@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from fastapi import Depends, HTTPException, Request, status
 
+from app.config import get_settings
 from app.deps import AuthContext
 from app.jobs.store import JobStore
 from app.schemas.enums import ServiceType
@@ -22,6 +23,10 @@ from app.wallet.repository import UsageRepository
 
 SubmitRequest = MediaKitRequest | UpscaleRequest | ImageToVideoRequest
 Enqueuer = Callable[[str, str], Awaitable[object]]
+QueueDepthFn = Callable[[], Awaitable[int]]
+
+# Seconds the caller (Wix) should wait before retrying when we shed load.
+RETRY_AFTER_SECONDS = 5
 
 
 # ── Providers (resources live on app.state; overridable in tests) ───────────────
@@ -42,10 +47,15 @@ def get_arq_pool(request: Request):
     return getattr(request.app.state, "arq_pool", None)
 
 
+def get_queue_depth(request: Request) -> QueueDepthFn:
+    return request.app.state.queue_depth
+
+
 StoreDep = Annotated[JobStore, Depends(get_job_store)]
 UsageDep = Annotated[UsageRepository, Depends(get_usage_repo)]
 EnqueueDep = Annotated[Enqueuer, Depends(get_enqueue)]
 ArqPoolDep = Annotated[object, Depends(get_arq_pool)]
+QueueDepthDep = Annotated[QueueDepthFn, Depends(get_queue_depth)]
 
 
 def poll_url(job_id: str) -> str:
@@ -60,13 +70,15 @@ async def submit_job(
     store: JobStore,
     usage: UsageRepository,
     enqueue: Enqueuer,
+    queue_depth: QueueDepthFn,
 ) -> JobAccepted:
     """Idempotent submit: one job per (member_id, client_ref); 202 JobAccepted.
 
     Order matters for correctness under concurrent retries:
       1) fast path — if a job already exists for this client_ref, return it
-         (no new job, no usage, no enqueue);
-      2) else claim via SETNX (create_job_idempotent). Only the winner records
+         (no new job, no usage, no enqueue, no backpressure shed);
+      2) backpressure — shed new work with 429 + Retry-After if the queue is full;
+      3) else claim via SETNX (create_job_idempotent). Only the winner records
          usage + enqueues, so a lost race never double-charges or double-spends.
     """
     # member_id is already HMAC-bound (prompt 06); defensive equality guard.
@@ -82,6 +94,21 @@ async def submit_job(
             service=service,
             poll_url=poll_url(existing_id),
             quoted_credits=req.quoted_credits,
+        )
+
+    # ── Inbound backpressure (load absorption) ─────────────────────────────────
+    #  100 req/s inbound
+    #    │ cheap path: validate + Redis write + enqueue (no fal here)
+    #    ▼
+    #  ARQ queue (Redis) ── depth ≥ MAX_QUEUE_DEPTH ─▶ 429 + Retry-After
+    #    ▼ workers pull (max_jobs=20)
+    #  fal Semaphore (bounded) ── caps REAL concurrency to fal ─▶ fal.ai queue
+    max_depth = get_settings().max_queue_depth
+    if await queue_depth() >= max_depth:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Queue is full; retry later.",
+            headers={"Retry-After": str(RETRY_AFTER_SECONDS)},
         )
 
     job_id = f"job_{uuid4().hex}"
