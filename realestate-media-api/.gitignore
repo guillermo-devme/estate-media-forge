@@ -1,0 +1,17 @@
+# Generated media (served via StaticFiles, never committed)
+media/
+!media/.gitkeep
+
+# Local databases (usage/audit ledger)
+*.db
+
+# Secrets / environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
