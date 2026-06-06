@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import get_settings
@@ -40,6 +40,12 @@ class UsageRepository:
     async def dispose(self) -> None:
         """Dispose the engine / connection pool."""
         await self._engine.dispose()
+
+    async def ping(self) -> bool:
+        """Liveness check for the readiness probe."""
+        async with self._engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return True
 
     @span("usage.record_event")
     async def record_event(
@@ -77,9 +83,7 @@ class UsageRepository:
         """All events for a job, oldest first."""
         async with self._session() as session:
             stmt = (
-                select(UsageEvent)
-                .where(UsageEvent.job_id == job_id)
-                .order_by(UsageEvent.id.asc())
+                select(UsageEvent).where(UsageEvent.job_id == job_id).order_by(UsageEvent.id.asc())
             )
             return list((await session.execute(stmt)).scalars().all())
 

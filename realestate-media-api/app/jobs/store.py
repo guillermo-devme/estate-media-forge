@@ -49,6 +49,10 @@ class JobStore:
         if self._redis is not None:
             await self._redis.aclose()
 
+    async def ping(self) -> bool:
+        """Liveness check for the readiness probe."""
+        return bool(await self.redis.ping())
+
     @staticmethod
     def _build_record(
         *,
