@@ -37,9 +37,9 @@ class MetricsLite(BaseModel):
     summary="Lightweight operational metrics",
     description="""Operational counters for monitoring the system health.
 
-**Purpose:** Gives Wix (or an ops dashboard) visibility into queue pressure, worker load, and
-money-owed situations (failed refunds). Useful for deciding whether to back off submissions
-or alert on stuck refunds.
+**Purpose:** Gives Wix (or an ops dashboard) visibility into queue pressure, worker load,
+provider capacity, and money-owed situations. Useful for deciding whether to back off
+submissions, alert on stuck refunds, or confirm the fal circuit breaker state.
 
 **Counters returned:**
 - `queue_depth` — jobs waiting in the ARQ queue (Redis). High = workers are saturated.
@@ -47,17 +47,29 @@ or alert on stuck refunds.
 - `fal_semaphore` — `{limit, in_use, available}`: how much of the fal concurrency budget is consumed.
 - `refund_failures` — cumulative count of failed Wix refund callbacks. **Non-zero means money is
   owed back to members.** Alert and investigate immediately.
+- `fal_circuit_open` — **True if fal.ai credits are exhausted** and new submits will be rejected
+  with 503. When this is `true`, do not attempt new submissions — they will fail. Wait for the
+  operator to top up the fal account (the circuit auto-closes on recovery).
+- `fal_balance_usd` — last known fal account balance in USD (null if never checked). Use this for
+  proactive backoff or dashboard alerting.
 
 **Use case — ops monitoring / Wix adaptive backoff:**
 
 ```
  Ops dashboard / Wix      FastAPI /v1/metrics-lite
  ─────────────────────    ───────────────────────
- periodic poll ─────────▶ read Redis counters + semaphore
- ◀── { queue_depth: 12, active_jobs: 8, fal_semaphore: {limit:8, in_use:6, available:2},
-       refund_failures: 0 }
- if queue_depth > threshold → slow down submissions
- if refund_failures > 0    → alert: money owed back
+ periodic poll ─────────▶ read Redis counters + semaphore + circuit state
+ ◀── { queue_depth: 12, active_jobs: 8,
+       fal_semaphore: {limit:8, in_use:6, available:2},
+       refund_failures: 0,
+       fal_circuit_open: false,
+       fal_balance_usd: 45.20 }
+
+ Decision tree:
+   if fal_circuit_open    → stop submitting, show "maintenance" to members
+   if fal_balance_usd < 5 → alert: imminent exhaustion
+   if queue_depth > 400   → slow down submissions
+   if refund_failures > 0 → alert: money owed back
 ```
 """,
 )

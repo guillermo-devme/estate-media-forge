@@ -68,6 +68,36 @@ _HOW_IT_WORKS = """\
 3. Wix polls `GET /v1/jobs/{job_id}` until the job is `completed`, `partial`, or `failed`.
 4. On partial/total failure the worker refunds exactly the failed ratios' credits back to Wix
    (idempotent on `refund_{job_id}`).
+
+---
+**Provider credit exhaustion (fal.ai balance monitor + circuit breaker)**
+
+This service depends on fal.ai credits to run AI models. When the fal account runs low or is
+exhausted, the system protects members from being charged for work that can't execute:
+
+```
+ Periodic check (ARQ cron, every 5 min)
+   │ GET api.fal.ai/v1/account/billing
+   ▼
+ balance < $20 ──▶ ⚠️ Google Chat alert: "Top up soon"
+ balance == $0 ──▶ 🚨 CIRCUIT BREAKER TRIPPED
+   │
+   ▼
+ Submit endpoints → 503 "Provider capacity exhausted" + Retry-After: 300
+   (member wallet is NOT decremented — no charge for dead-on-arrival work)
+   │
+   ▼  balance > $0 (top-up detected on next check)
+ Circuit auto-closes → ✅ submits resume normally
+```
+
+Additionally, the fal client watches for live **402 (Payment Required)** responses. Three
+consecutive 402s trip the circuit immediately (even between periodic checks).
+
+**What members experience:**
+- If fal runs out *during* their job: failed ratios are refunded proportionally (no loss).
+- If fal is out *before* their submit: they get a "try again later" — no charge, no stuck credits.
+
+Monitor via `GET /v1/metrics-lite` → `fal_circuit_open` and `fal_balance_usd`.
 """
 
 _OPENAPI_TAGS = [
