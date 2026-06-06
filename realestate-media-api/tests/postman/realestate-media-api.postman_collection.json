@@ -1,0 +1,274 @@
+{
+  "info": {
+    "name": "Real-Estate Media-Kit API (HMAC-signed)",
+    "description": "Postman plays the role of the Wix Velo backend: every request is HMAC-signed (X-Service-Key, X-Member-Id, X-Timestamp, X-Nonce, X-Signature over `${ts}.${nonce}.${member_id}.${sha256(body)}`). GET requests carry a minimal {\"member_id\":...} body so the hash matches the server (which signs the canonical member body for empty GETs). Wallet/top-up endpoints do not exist here — Wix owns balance.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "quoted_credits", "value": "" },
+    { "key": "client_ref", "value": "" },
+    { "key": "job_id", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection pre-request: HMAC-sign as the Wix Velo backend would.",
+          "const memberId = pm.environment.get('member_id');",
+          "if (memberId) {",
+          "  const secret = pm.environment.get('service_hmac_secret');",
+          "  const serviceKey = pm.environment.get('service_key');",
+          "  const ts = Math.floor(Date.now() / 1000).toString();",
+          "  const nonce = pm.variables.replaceIn('{{$guid}}');",
+          "  // Fresh client_ref for submit bodies (idempotency key).",
+          "  pm.collectionVariables.set('client_ref', pm.variables.replaceIn('{{$guid}}'));",
+          "  let raw = '';",
+          "  if (pm.request.body && pm.request.body.mode === 'raw' && pm.request.body.raw) {",
+          "    raw = pm.variables.replaceIn(pm.request.body.raw.toString());",
+          "  }",
+          "  const bodyHash = CryptoJS.SHA256(raw).toString(CryptoJS.enc.Hex);",
+          "  const message = ts + '.' + nonce + '.' + memberId + '.' + bodyHash;",
+          "  const sig = CryptoJS.HmacSHA256(message, secret).toString(CryptoJS.enc.Hex);",
+          "  pm.request.headers.upsert({ key: 'X-Service-Key', value: serviceKey });",
+          "  pm.request.headers.upsert({ key: 'X-Member-Id', value: memberId });",
+          "  pm.request.headers.upsert({ key: 'X-Timestamp', value: ts });",
+          "  pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });",
+          "  pm.request.headers.upsert({ key: 'X-Signature', value: sig });",
+          "  pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 ok', () => pm.response.to.have.status(200));",
+              "pm.test('status ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Quotation",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": \"{{member_id}}\",\n  \"service\": \"media_kit\",\n  \"image_url\": \"{{image_url}}\",\n  \"room_name\": \"Master Bedroom\",\n  \"aspect_ratios\": [\"1:1\", \"9:16\", \"16:9\"],\n  \"duration_seconds\": 5,\n  \"do_expand\": true\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{base_url}}/v1/quotation", "host": ["{{base_url}}"], "path": ["v1", "quotation"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('has total_credits', () => pm.expect(body.total_credits).to.be.a('number'));",
+              "pm.test('has breakdown', () => pm.expect(body.breakdown).to.be.an('array'));",
+              "pm.test('no USD/balance leaked', () => {",
+              "  const blob = JSON.stringify(body).toLowerCase();",
+              "  pm.expect(blob).to.not.include('usd');",
+              "  pm.expect(blob).to.not.include('balance');",
+              "});",
+              "pm.collectionVariables.set('quoted_credits', body.total_credits);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Submit Media Kit",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": \"{{member_id}}\",\n  \"client_ref\": \"{{client_ref}}\",\n  \"quoted_credits\": {{quoted_credits}},\n  \"image_url\": \"{{image_url}}\",\n  \"room_name\": \"Master Bedroom\",\n  \"aspect_ratios\": [\"1:1\", \"9:16\", \"16:9\"],\n  \"do_expand\": true,\n  \"upscale_factor\": 2,\n  \"duration_seconds\": 5\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{base_url}}/v1/media-kit", "host": ["{{base_url}}"], "path": ["v1", "media-kit"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('202 accepted', () => pm.response.to.have.status(202));",
+              "const body = pm.response.json();",
+              "pm.test('queued', () => pm.expect(body.status).to.eql('queued'));",
+              "pm.test('has quoted_credits', () => pm.expect(body.quoted_credits).to.be.a('number'));",
+              "pm.collectionVariables.set('job_id', body.job_id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Poll Job",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"member_id\":\"{{member_id}}\"}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{base_url}}/v1/jobs/{{job_id}}", "host": ["{{base_url}}"], "path": ["v1", "jobs", "{{job_id}}"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const allowed = ['queued', 'running', 'partial', 'completed', 'failed'];",
+              "pm.test('status valid', () => pm.expect(allowed).to.include(body.status));",
+              "if (body.status === 'completed') {",
+              "  pm.test('each ratio has video_url', () => {",
+              "    body.assets.forEach((a) => pm.expect(a.video_url, a.aspect_ratio).to.be.a('string'));",
+              "  });",
+              "}",
+              "// Re-poll until terminal (worker must be running).",
+              "if (['queued', 'running'].includes(body.status)) {",
+              "  setTimeout(() => {}, 2000);",
+              "  pm.execution.setNextRequest('4. Poll Job');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. NEGATIVE: tampered signature -> 401",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": \"{{member_id}}\",\n  \"client_ref\": \"{{client_ref}}\",\n  \"quoted_credits\": {{quoted_credits}},\n  \"image_url\": \"{{image_url}}\",\n  \"room_name\": \"Master Bedroom\",\n  \"aspect_ratios\": [\"1:1\", \"9:16\", \"16:9\"]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{base_url}}/v1/media-kit", "host": ["{{base_url}}"], "path": ["v1", "media-kit"] }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Corrupt the signature AFTER the collection script signed correctly.",
+              "// A tampered body would invalidate this same HMAC -> identical 401 path.",
+              "const current = pm.request.headers.get('X-Signature') || '0000';",
+              "pm.request.headers.upsert({ key: 'X-Signature', value: current.slice(0, -2) + 'ff' });"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('401 unauthorized (HMAC enforced)', () => pm.response.to.have.status(401));"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. NEGATIVE: other member -> 404",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"member_id\":\"{{other_member_id}}\"}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{base_url}}/v1/jobs/{{job_id}}", "host": ["{{base_url}}"], "path": ["v1", "jobs", "{{job_id}}"] }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Re-sign as a DIFFERENT member: valid signature, but not the owner.",
+              "const otherId = pm.environment.get('other_member_id');",
+              "const secret = pm.environment.get('service_hmac_secret');",
+              "const serviceKey = pm.environment.get('service_key');",
+              "const ts = Math.floor(Date.now() / 1000).toString();",
+              "const nonce = pm.variables.replaceIn('{{$guid}}');",
+              "const raw = pm.variables.replaceIn(pm.request.body.raw.toString());",
+              "const bodyHash = CryptoJS.SHA256(raw).toString(CryptoJS.enc.Hex);",
+              "const sig = CryptoJS.HmacSHA256(ts + '.' + nonce + '.' + otherId + '.' + bodyHash, secret).toString(CryptoJS.enc.Hex);",
+              "pm.request.headers.upsert({ key: 'X-Service-Key', value: serviceKey });",
+              "pm.request.headers.upsert({ key: 'X-Member-Id', value: otherId });",
+              "pm.request.headers.upsert({ key: 'X-Timestamp', value: ts });",
+              "pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });",
+              "pm.request.headers.upsert({ key: 'X-Signature', value: sig });",
+              "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('404 not found (ownership)', () => pm.response.to.have.status(404));"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Metrics Lite",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"member_id\":\"{{member_id}}\"}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": { "raw": "{{base_url}}/v1/metrics-lite", "host": ["{{base_url}}"], "path": ["v1", "metrics-lite"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('has counters', () => {",
+              "  pm.expect(body).to.have.property('queue_depth');",
+              "  pm.expect(body).to.have.property('fal_semaphore');",
+              "  pm.expect(body).to.have.property('refund_failures');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -37,6 +37,56 @@ worker. Run it alongside the API (needs Redis):
 arq app.jobs.worker.WorkerSettings
 ```
 
+## Local process topology
+
+```
+ ┌─ redis-server ─┐  ┌─ uvicorn app.main:app ─┐  ┌─ arq app.jobs.worker.WorkerSettings ─┐
+ │ jobs + queue   │  │ API(8000) + /docs       │  │ pipeline + fal + refund → Wix         │
+ └────────────────┘  └─────────────────────────┘  └───────────────────────────────────────┘
+        └──────── SQLite usage.db (audit ledger, NOT balance) ────────┘
+   balance truth = Wix CMS (separate; tested via ../docs/wix-integration/SETUP.md)
+```
+
+## Required `.env`
+
+```
+FASTAPI_SERVICE_KEY     shared static key (Wix → API)
+SERVICE_HMAC_SECRET     shared HMAC secret (both directions)
+WIX_REFUND_URL          Wix /_functions/falRefund (worker refund callback)
+FAL_KEY                 fal.ai API key
+REDIS_URL               redis://localhost:6379
+LEDGER_DSN              sqlite+aiosqlite:///./usage.db
+EARNINGS_RATIO          3.2
+CREDIT_PEG_USD          0.01
+LANGSMITH_API_KEY / LANGSMITH_PROJECT / LANGCHAIN_TRACING_V2   (optional tracing)
+```
+
+> Token **balances**, **Stripe** top-ups, and **role checks** are exercised on the **Wix** side
+> (`../docs/wix-integration/SETUP.md`), not here. This service owns no balance.
+
+## Test with Postman (acts as the Wix Velo backend)
+
+A signed collection lives in `tests/postman/`:
+
+1. Start `redis-server`.
+2. Terminal A: `uvicorn app.main:app --reload`
+3. Terminal B: `arq app.jobs.worker.WorkerSettings`
+4. Import `tests/postman/realestate-media-api.postman_collection.json` and
+   `realestate-media-api.local.postman_environment.json`.
+5. In the environment set `service_key` + `service_hmac_secret` (matching your `.env`), `member_id`,
+   and a sample `image_url`.
+6. Run the collection in order. A **collection pre-request script** signs every request with the
+   HMAC headers (`X-Service-Key`, `X-Member-Id`, `X-Timestamp`, `X-Nonce`, `X-Signature`), so you
+   never sign by hand.
+
+Golden path: `GET /health` → `POST /v1/quotation` (saves `quoted_credits`) → `POST /v1/media-kit`
+(202, saves `job_id`) → poll `GET /v1/jobs/{job_id}` to `completed`. Negatives: a tampered
+signature → 401; polling another member's job → 404. To observe the signed refund callback, point
+`WIX_REFUND_URL` at a local mock (e.g. Beeceptor) and force a ratio failure.
+
+> GET requests carry a minimal `{"member_id": "..."}` body so the signed hash matches the server
+> (which hashes the canonical member body for empty GETs).
+
 ## Concurrency & backpressure (tuning knobs)
 
 Designed to absorb bursts (~100 req/s) where the heavy work is external. Load is shed/queued at
