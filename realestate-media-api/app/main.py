@@ -107,9 +107,20 @@ async def lifespan(app: FastAPI):
     app.state.usage = usage
     app.state.job_store = JobStore()
     app.state.refund_client = WixRefundClient()
-    app.state.arq_pool = await get_arq_pool()
+
+    # ARQ pool + queue_depth: degrade gracefully when Redis is unavailable (docs/dev mode).
+    try:
+        app.state.arq_pool = await get_arq_pool()
+    except Exception:
+        _logger.warning("app.startup: Redis unavailable — job submission disabled (docs-only mode)")
+        app.state.arq_pool = None
+
     app.state.enqueue = enqueue_job
-    app.state.queue_depth = queue_depth
+
+    async def _zero_depth() -> int:
+        return 0
+
+    app.state.queue_depth = queue_depth if app.state.arq_pool else _zero_depth
 
     _logger.info("app.startup")
     try:
