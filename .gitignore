@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# Secrets / environment
+.env
+*.env
+**/.kiro/settings/mcp.json
+
+# Local databases (usage/audit ledger)
+*.db
+
+# Generated media
+realestate-media-api/media/
+!realestate-media-api/media/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# IDE / editor
+*.swp
