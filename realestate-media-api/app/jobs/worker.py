@@ -17,6 +17,7 @@ import httpx
 from app.config import RATIO_DIMS, get_settings
 from app.jobs.enqueue import redis_settings
 from app.jobs.store import JobStore
+from arq.cron import cron
 from app.obs.logging import get_logger
 from app.obs.spans import set_job_context
 from app.pipeline.graph import run_pipeline
@@ -321,10 +322,22 @@ async def on_shutdown(ctx: dict) -> None:
         await usage.dispose()
 
 
+# ── Periodic balance check (ARQ cron) ─────────────────────────────────────────
+async def check_fal_balance_task(ctx: dict) -> dict:
+    """Cron task: check fal.ai balance, alert if low, trip circuit if exhausted."""
+    from app.providers.fal_balance import run_balance_check
+
+    return await run_balance_check()
+
+
 class WorkerSettings:
     """ARQ worker configuration (run with `arq app.jobs.worker.WorkerSettings`)."""
 
     functions = [process_media_job, process_upscale_job, process_i2v_job]
+    cron_jobs = [
+        # Check fal balance every 5 minutes (configurable via FAL_BALANCE_CHECK_INTERVAL_SECONDS).
+        cron(check_fal_balance_task, minute={0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55}),
+    ]
     redis_settings = redis_settings()
     max_jobs = 20
     job_timeout = 1800  # 30 min ceiling per job

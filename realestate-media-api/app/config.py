@@ -80,6 +80,15 @@ class Settings(BaseSettings):
     langsmith_project: str = Field(default="realestate-media", validation_alias="LANGSMITH_PROJECT")
     langchain_tracing_v2: bool = Field(default=True, validation_alias="LANGCHAIN_TRACING_V2")
 
+    # ── Alerts & circuit breaker ─────────────────────────────────────────────────
+    google_chat_webhook_url: str = Field(default="", validation_alias="GOOGLE_CHAT_WEBHOOK_URL")
+    fal_balance_alert_threshold_usd: float = Field(
+        default=20.0, validation_alias="FAL_BALANCE_ALERT_THRESHOLD_USD"
+    )
+    fal_balance_check_interval_seconds: int = Field(
+        default=300, validation_alias="FAL_BALANCE_CHECK_INTERVAL_SECONDS"
+    )
+
     # ── Swappable model registry (each env-overridable) ──────────────────────────
     # Verified against fal.ai docs on 2026-06-05.
     fal_model_upscale: str = Field(

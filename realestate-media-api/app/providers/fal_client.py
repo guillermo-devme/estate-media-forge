@@ -110,7 +110,12 @@ async def _request_once(
     if code >= 500:
         raise FalTransientError(f"fal upstream {code}")
     if code >= 400:
-        # 4xx = bad arguments; surface immediately, do not retry.
+        # 402 = payment required → signal the circuit breaker.
+        if code == 402:
+            from app.providers.fal_balance import trip_on_402
+
+            trip_on_402()
+        # 4xx = bad arguments or payment; surface immediately, do not retry.
         raise FalValidationError(f"fal rejected request ({code})")
     return response.json()
 

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from app.deps import Auth
 from app.obs.spans import span_ctx
 from app.providers import fal_client
+from app.providers.fal_balance import circuit as fal_circuit
 from app.routers._shared import ArqPoolDep, StoreDep
 
 router = APIRouter(prefix="/v1", tags=["metrics"])
@@ -22,6 +23,12 @@ class MetricsLite(BaseModel):
         ..., description="fal concurrency {limit,in_use,available}."
     )
     refund_failures: int = Field(..., description="Count of failed Wix refund callbacks.")
+    fal_circuit_open: bool = Field(
+        ..., description="True if fal provider capacity is exhausted (503 on submit)."
+    )
+    fal_balance_usd: float | None = Field(
+        None, description="Last known fal account balance (None if unchecked)."
+    )
 
 
 @router.get(
@@ -78,4 +85,6 @@ async def metrics_lite(auth: Auth, store: StoreDep, pool: ArqPoolDep) -> Metrics
             active_jobs=active_jobs,
             fal_semaphore=fal_client.semaphore_stats(),
             refund_failures=refund_failures,
+            fal_circuit_open=fal_circuit.is_open,
+            fal_balance_usd=fal_circuit.last_balance_usd,
         )

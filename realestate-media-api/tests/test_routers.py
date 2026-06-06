@@ -256,8 +256,16 @@ def test_metrics_lite(client):
     resp = client.get("/v1/metrics-lite", headers=_sign(get_body, "mem_1"))
     assert resp.status_code == 200
     data = resp.json()
-    assert set(data) == {"queue_depth", "active_jobs", "fal_semaphore", "refund_failures"}
+    assert set(data) == {
+        "queue_depth",
+        "active_jobs",
+        "fal_semaphore",
+        "refund_failures",
+        "fal_circuit_open",
+        "fal_balance_usd",
+    }
     assert set(data["fal_semaphore"]) == {"limit", "in_use", "available"}
+    assert data["fal_circuit_open"] is False  # healthy by default
 
 
 def test_backpressure_returns_429_with_retry_after(client):
@@ -290,3 +298,36 @@ def test_many_submits_all_accept_fast(client):
         resp = client.post("/v1/media-kit", content=body, headers=_sign(body, "mem_1"))
         assert resp.status_code == 202
     assert len(client.app.state.enqueue_calls) == 100
+
+
+def test_circuit_breaker_returns_503(client):
+    from app.providers.fal_balance import circuit
+
+    circuit.is_open = True
+    try:
+        body = _media_kit_body(client_ref="cb_test")
+        resp = client.post("/v1/media-kit", content=body, headers=_sign(body, "mem_1"))
+        assert resp.status_code == 503
+        assert "provider capacity" in resp.json()["detail"].lower()
+        assert resp.headers["Retry-After"] == "300"
+        assert client.app.state.enqueue_calls == []  # nothing enqueued
+    finally:
+        circuit.is_open = False
+
+
+def test_circuit_breaker_does_not_block_existing_job(client):
+    # Create a job first (circuit healthy).
+    body = _media_kit_body(client_ref="cb_existing")
+    first = client.post("/v1/media-kit", content=body, headers=_sign(body, "mem_1"))
+    assert first.status_code == 202
+
+    # Trip the circuit; retry the same client_ref (fast-path).
+    from app.providers.fal_balance import circuit
+
+    circuit.is_open = True
+    try:
+        second = client.post("/v1/media-kit", content=body, headers=_sign(body, "mem_1"))
+        assert second.status_code == 202
+        assert second.json()["job_id"] == first.json()["job_id"]
+    finally:
+        circuit.is_open = False

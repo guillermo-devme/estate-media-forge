@@ -96,6 +96,18 @@ async def submit_job(
             quoted_credits=req.quoted_credits,
         )
 
+    # ── Circuit breaker: provider capacity exhausted ─────────────────────────
+    # If fal.ai balance is zero (or 402s are coming), reject new work early so
+    # the member's wallet is never decremented for a job that can't run.
+    from app.providers.fal_balance import is_circuit_open
+
+    if is_circuit_open():
+        raise HTTPException(
+            status_code=503,
+            detail="Service temporarily unavailable — provider capacity exhausted. Try again later.",
+            headers={"Retry-After": "300"},
+        )
+
     # ── Inbound backpressure (load absorption) ─────────────────────────────────
     #  100 req/s inbound
     #    │ cheap path: validate + Redis write + enqueue (no fal here)
