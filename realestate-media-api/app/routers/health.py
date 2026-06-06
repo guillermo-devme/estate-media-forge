@@ -9,12 +9,12 @@ from app.routers._shared import StoreDep, UsageDep
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health")
+@router.get("/health", summary="Liveness probe")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.get("/v1/ready")
+@router.get("/v1/ready", summary="Readiness probe (pings Redis + ledger)")
 async def ready(store: StoreDep, usage: UsageDep) -> dict[str, object]:
     """Ping Redis + the usage ledger."""
     try:

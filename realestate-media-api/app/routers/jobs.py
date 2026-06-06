@@ -14,7 +14,12 @@ _NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not fo
 
 
 # Registered before /jobs/{job_id} so the literal path wins.
-@router.get("/jobs/by-client-ref/{client_ref}", response_model=JobStatusResponse)
+@router.get(
+    "/jobs/by-client-ref/{client_ref}",
+    response_model=JobStatusResponse,
+    summary="Resolve a job by client_ref",
+    description="Reconciliation primitive: find the caller's job for a client_ref (404 if none).",
+)
 async def get_job_by_client_ref(client_ref: str, auth: Auth, store: StoreDep) -> JobStatusResponse:
     """Reconciliation primitive: resolve a member's job by its client_ref."""
     job_id = await store.get_job_by_client_ref(auth.member_id, client_ref)
@@ -26,7 +31,13 @@ async def get_job_by_client_ref(client_ref: str, auth: Auth, store: StoreDep) ->
     return JobStatusResponse.model_validate(job)
 
 
-@router.get("/jobs/{job_id}", response_model=JobStatusResponse)
+@router.get(
+    "/jobs/{job_id}",
+    response_model=JobStatusResponse,
+    summary="Get job status",
+    description="Status + per-ratio assets + quoted/refunded credits. "
+    "Returns 404 unless the job belongs to the signed member.",
+)
 async def get_job_status(job_id: str, auth: Auth, store: StoreDep) -> JobStatusResponse:
     job = await store.get_job(job_id)
     # 404 (not 403) on ownership mismatch — no cross-member enumeration.

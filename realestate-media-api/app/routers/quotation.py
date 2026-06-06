@@ -29,7 +29,13 @@ router = APIRouter(prefix="/v1")
 _engine = QuotationEngine()
 
 
-@router.post("/quotation", response_model=QuotationResponse, tags=["quotation"])
+@router.post(
+    "/quotation",
+    response_model=QuotationResponse,
+    tags=["quotation"],
+    summary="Quote a service in credits",
+    description="Pure pricing: returns total_credits + per-stage breakdown. No balance, no USD.",
+)
 async def quote(req: QuotationRequest, auth: Auth) -> QuotationResponse:
     """Price a service in credits (with per-stage breakdown). No balance/USD."""
     if req.member_id != auth.member_id:
@@ -44,7 +50,13 @@ async def quote(req: QuotationRequest, auth: Auth) -> QuotationResponse:
     return QuotationResponse.model_validate(result)
 
 
-@router.post("/pricing/allowance", response_model=AllowanceResponse, tags=["pricing"])
+@router.post(
+    "/pricing/allowance",
+    response_model=AllowanceResponse,
+    tags=["pricing"],
+    summary="Allowance for a balance",
+    description="Given a Wix-provided credit balance, returns how many of each service it buys.",
+)
 async def allowance(req: AllowanceRequest, auth: Auth) -> AllowanceResponse:
     """How many of each service a Wix-provided credit balance buys."""
     if req.member_id != auth.member_id:

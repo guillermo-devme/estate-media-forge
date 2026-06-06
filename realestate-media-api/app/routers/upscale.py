@@ -13,7 +13,14 @@ from app.schemas.responses import JobAccepted
 router = APIRouter(prefix="/v1", tags=["upscale"])
 
 
-@router.post("/upscale", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/upscale",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Submit an upscale job",
+    description="Upscale an image across the requested aspect ratios. "
+    "Idempotent per client_ref; returns 202 immediately.",
+)
 async def submit_upscale(
     req: UpscaleRequest,
     auth: Auth,

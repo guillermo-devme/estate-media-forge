@@ -24,7 +24,12 @@ class MetricsLite(BaseModel):
     refund_failures: int = Field(..., description="Count of failed Wix refund callbacks.")
 
 
-@router.get("/metrics-lite", response_model=MetricsLite)
+@router.get(
+    "/metrics-lite",
+    response_model=MetricsLite,
+    summary="Lightweight operational metrics",
+    description="Queue depth, active jobs, fal concurrency, and failed-refund count.",
+)
 async def metrics_lite(auth: Auth, store: StoreDep, pool: ArqPoolDep) -> MetricsLite:
     async with span_ctx("metrics.lite"):
         queue_depth = 0

@@ -25,7 +25,14 @@ from app.schemas.responses import JobAccepted
 router = APIRouter(prefix="/v1", tags=["media-kit"])
 
 
-@router.post("/media-kit", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/media-kit",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Submit a media-kit job",
+    description="Fan out a property photo into 1:1 / 9:16 / 16:9 (upscale → expand → i2v). "
+    "Idempotent per client_ref; returns 202 immediately.",
+)
 async def submit_media_kit(
     req: MediaKitRequest,
     auth: Auth,

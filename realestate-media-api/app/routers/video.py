@@ -13,7 +13,14 @@ from app.schemas.responses import JobAccepted
 router = APIRouter(prefix="/v1", tags=["image-to-video"])
 
 
-@router.post("/image-to-video", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/image-to-video",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Submit an image-to-video job",
+    description="Generate a cinematic clip from an image per requested ratio. "
+    "Idempotent per client_ref; returns 202 immediately.",
+)
 async def submit_image_to_video(
     req: ImageToVideoRequest,
     auth: Auth,
