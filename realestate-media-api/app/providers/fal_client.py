@@ -90,6 +90,13 @@ async def aclose() -> None:
         _client = None
 
 
+def semaphore_stats() -> dict[str, int]:
+    """Best-effort fal concurrency stats for the metrics endpoint."""
+    limit = get_settings().max_fal_concurrency
+    available = _semaphore._value  # noqa: SLF001 - lite metric only
+    return {"limit": limit, "available": available, "in_use": max(0, limit - available)}
+
+
 # ── Low-level request with transient retry ──────────────────────────────────────
 async def _request_once(
     method: str, url: str, *, json: dict | None, client: httpx.AsyncClient

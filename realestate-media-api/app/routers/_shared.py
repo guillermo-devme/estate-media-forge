@@ -37,9 +37,15 @@ def get_enqueue(request: Request) -> Enqueuer:
     return request.app.state.enqueue
 
 
+def get_arq_pool(request: Request):
+    """The ARQ pool for read-only metrics (may be None if not started)."""
+    return getattr(request.app.state, "arq_pool", None)
+
+
 StoreDep = Annotated[JobStore, Depends(get_job_store)]
 UsageDep = Annotated[UsageRepository, Depends(get_usage_repo)]
 EnqueueDep = Annotated[Enqueuer, Depends(get_enqueue)]
+ArqPoolDep = Annotated[object, Depends(get_arq_pool)]
 
 
 def poll_url(job_id: str) -> str:

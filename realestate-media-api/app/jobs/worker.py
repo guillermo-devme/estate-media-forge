@@ -215,6 +215,11 @@ async def _settle(
                 "error": repr(exc),
             },
         )
+        # Surface unbilled refunds in /v1/metrics-lite (cross-process counter).
+        try:
+            await store.incr_refund_failures()
+        except Exception:  # noqa: BLE001 - metrics must never mask the real error
+            pass
 
 
 # ── Job entrypoints ───────────────────────────────────────────────────────────

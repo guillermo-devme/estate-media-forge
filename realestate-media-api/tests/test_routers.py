@@ -34,6 +34,9 @@ class FakeRedis:
     async def get(self, key):
         return self.data.get(key)
 
+    async def keys(self, pattern):
+        return []
+
     async def ping(self):
         return True
 
@@ -94,6 +97,12 @@ def client(monkeypatch):
         app.state.enqueue_calls.append((service, job_id))
 
     app.state.enqueue = fake_enqueue
+
+    class FakeArqPool:
+        async def queued_jobs(self):
+            return []
+
+    app.state.arq_pool = FakeArqPool()
     app.dependency_overrides[get_nonce_store] = lambda: MemoryNonceStore()
     # No `with` → lifespan does not run (no real Redis/ARQ needed).
     return TestClient(app)
@@ -185,3 +194,61 @@ def test_by_client_ref_lookup(client):
 
 def test_health_no_auth(client):
     assert client.get("/health").json() == {"status": "ok"}
+
+
+def test_quotation_returns_credits_and_breakdown(client):
+    body = json.dumps(
+        {
+            "member_id": "mem_1",
+            "service": "media_kit",
+            "aspect_ratios": ["1:1", "9:16", "16:9"],
+            "duration_seconds": 5,
+            "do_expand": True,
+            "room_name": "den",
+        }
+    ).encode()
+    resp = client.post("/v1/quotation", content=body, headers=_sign(body, "mem_1"))
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["service"] == "media_kit"
+    assert data["total_credits"] == 3366
+    assert {item["stage"] for item in data["breakdown"]} == {"upscale", "outpaint", "i2v"}
+    # No balance/USD anywhere.
+    blob = json.dumps(data).lower()
+    assert "usd" not in blob and "balance" not in blob
+
+
+def test_quotation_missing_room_name_is_422(client):
+    body = json.dumps(
+        {"member_id": "mem_1", "service": "media_kit", "aspect_ratios": ["1:1"]}
+    ).encode()
+    resp = client.post("/v1/quotation", content=body, headers=_sign(body, "mem_1"))
+    assert resp.status_code == 422
+
+
+def test_allowance_returns_counts(client):
+    body = json.dumps({"member_id": "mem_1", "balance": 10000}).encode()
+    resp = client.post("/v1/pricing/allowance", content=body, headers=_sign(body, "mem_1"))
+    assert resp.status_code == 200
+    allowance = resp.json()["allowance"]
+    assert set(allowance) == {"upscale_images", "videos_8s", "media_kits"}
+    assert all(isinstance(v, int) for v in allowance.values())
+
+
+def test_wallet_routes_do_not_exist(client):
+    get_body = json.dumps({"member_id": "mem_1"}, separators=(",", ":")).encode()
+    assert client.get("/v1/wallet", headers=_sign(get_body, "mem_1")).status_code == 404
+    top_up = json.dumps({"member_id": "mem_1"}).encode()
+    assert (
+        client.post("/v1/wallet/top-up", content=top_up, headers=_sign(top_up, "mem_1")).status_code
+        == 404
+    )
+
+
+def test_metrics_lite(client):
+    get_body = json.dumps({"member_id": "mem_1"}, separators=(",", ":")).encode()
+    resp = client.get("/v1/metrics-lite", headers=_sign(get_body, "mem_1"))
+    assert resp.status_code == 200
+    data = resp.json()
+    assert set(data) == {"queue_depth", "active_jobs", "fal_semaphore", "refund_failures"}
+    assert set(data["fal_semaphore"]) == {"limit", "in_use", "available"}

@@ -19,7 +19,7 @@ from app.jobs.enqueue import close_arq_pool, enqueue_job, get_arq_pool
 from app.jobs.store import JobStore
 from app.obs.logging import configure_logging, get_logger
 from app.providers.wix_client import WixRefundClient
-from app.routers import health, jobs, media_kit, upscale, video
+from app.routers import health, jobs, media_kit, metrics, quotation, upscale, video
 from app.wallet.repository import UsageRepository
 
 _logger = get_logger("app.main")
@@ -76,6 +76,8 @@ def create_app() -> FastAPI:
     app.include_router(upscale.router)
     app.include_router(video.router)
     app.include_router(jobs.router)
+    app.include_router(quotation.router)
+    app.include_router(metrics.router)
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

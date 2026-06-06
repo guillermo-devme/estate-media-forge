@@ -53,6 +53,19 @@ class JobStore:
         """Liveness check for the readiness probe."""
         return bool(await self.redis.ping())
 
+    # ── Cross-process metrics counters (worker increments, API reads) ───────────
+    async def incr_refund_failures(self) -> int:
+        """Increment the failed-Wix-refund counter (called by the worker)."""
+        return int(await self.redis.incr("metrics:refund_failures"))
+
+    async def get_refund_failures(self) -> int:
+        return int(await self.redis.get("metrics:refund_failures") or 0)
+
+    async def active_job_count(self) -> int:
+        """Best-effort count of jobs currently in-progress (ARQ in-progress keys)."""
+        keys = await self.redis.keys("arq:in-progress:*")
+        return len(keys)
+
     @staticmethod
     def _build_record(
         *,
