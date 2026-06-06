@@ -18,8 +18,33 @@ router = APIRouter(prefix="/v1", tags=["image-to-video"])
     response_model=JobAccepted,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Submit an image-to-video job",
-    description="Generate a cinematic clip from an image per requested ratio. "
-    "Idempotent per client_ref; returns 202 immediately.",
+    description="""Generate a cinematic walkthrough clip from a property image, per requested aspect ratio.
+Returns 202 immediately.
+
+**Purpose:** Standalone video generation (no upscale/expand) for members who already have a
+high-quality still. Uses fal.ai Seedance 2.0 with a cinematic prompt.
+
+**Use case — social media video from a hero shot:**
+
+1. Member has a polished kitchen photo → wants a 9:16 reel.
+2. Velo: `getQuote('image_to_video', { duration_seconds: 8 })` → `spend` → `callFastApi`.
+3. This endpoint: validate → record usage → create job → enqueue → **202**.
+4. Poll until `completed` → each ratio has a `video_url` (cinematic walkthrough).
+
+```
+ Wix Velo                    FastAPI /v1/image-to-video
+ ────────                    ──────────────────────────
+ spend(clientRef) ──────────▶ HMAC verify → create job → enqueue
+ ◀──── 202 {job_id}           Worker: i2v per ratio (prompt + duration) → save
+ poll ──────────────────────▶ status + video_url[]
+```
+
+The default cinematic prompt fills `room_name`:
+> "Create a 3d walkthrough animation of this property room: {room_name}. Add soft, clean elegant
+> lighting and smooth camera movements..."
+
+Override with `prompt_override` if needed. Same idempotency and backpressure guarantees.
+""",
 )
 async def submit_image_to_video(
     req: ImageToVideoRequest,

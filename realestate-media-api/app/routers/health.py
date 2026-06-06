@@ -9,12 +9,24 @@ from app.routers._shared import StoreDep, UsageDep
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health", summary="Liveness probe")
+@router.get(
+    "/health",
+    summary="Liveness probe",
+    description="Returns `{status: ok}` if the process is alive. No auth, no dependencies checked.",
+)
 async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.get("/v1/ready", summary="Readiness probe (pings Redis + ledger)")
+@router.get(
+    "/v1/ready",
+    summary="Readiness probe (pings Redis + ledger)",
+    description="""Verifies the service can actually serve requests: pings Redis (job store + queue) and
+the usage ledger (SQLite/Postgres). Returns 503 if either is unreachable.
+
+**Use case:** Load balancer health check or Wix pre-flight before submitting a job.
+""",
+)
 async def ready(store: StoreDep, usage: UsageDep) -> dict[str, object]:
     """Ping Redis + the usage ledger."""
     try:

@@ -28,7 +28,31 @@ class MetricsLite(BaseModel):
     "/metrics-lite",
     response_model=MetricsLite,
     summary="Lightweight operational metrics",
-    description="Queue depth, active jobs, fal concurrency, and failed-refund count.",
+    description="""Operational counters for monitoring the system health.
+
+**Purpose:** Gives Wix (or an ops dashboard) visibility into queue pressure, worker load, and
+money-owed situations (failed refunds). Useful for deciding whether to back off submissions
+or alert on stuck refunds.
+
+**Counters returned:**
+- `queue_depth` — jobs waiting in the ARQ queue (Redis). High = workers are saturated.
+- `active_jobs` — jobs currently in-progress (being processed by workers).
+- `fal_semaphore` — `{limit, in_use, available}`: how much of the fal concurrency budget is consumed.
+- `refund_failures` — cumulative count of failed Wix refund callbacks. **Non-zero means money is
+  owed back to members.** Alert and investigate immediately.
+
+**Use case — ops monitoring / Wix adaptive backoff:**
+
+```
+ Ops dashboard / Wix      FastAPI /v1/metrics-lite
+ ─────────────────────    ───────────────────────
+ periodic poll ─────────▶ read Redis counters + semaphore
+ ◀── { queue_depth: 12, active_jobs: 8, fal_semaphore: {limit:8, in_use:6, available:2},
+       refund_failures: 0 }
+ if queue_depth > threshold → slow down submissions
+ if refund_failures > 0    → alert: money owed back
+```
+""",
 )
 async def metrics_lite(auth: Auth, store: StoreDep, pool: ArqPoolDep) -> MetricsLite:
     async with span_ctx("metrics.lite"):

@@ -18,8 +18,28 @@ router = APIRouter(prefix="/v1", tags=["upscale"])
     response_model=JobAccepted,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Submit an upscale job",
-    description="Upscale an image across the requested aspect ratios. "
-    "Idempotent per client_ref; returns 202 immediately.",
+    description="""Upscale a property image across one or more aspect ratios. Returns 202 immediately.
+
+**Purpose:** A lighter, cheaper alternative to the full media kit when the member only needs a
+high-res image (no video). Uses fal.ai Clarity Upscaler.
+
+**Use case — quick listing photo enhancement:**
+
+1. Agent has a low-res photo → member clicks "Enhance".
+2. Velo: `getQuote('upscale')` → `spend` → `callFastApi('/v1/upscale')`.
+3. This endpoint: validate → record usage → create job → enqueue → **202**.
+4. Poll until `completed` → each requested ratio has an `upscaled_url`.
+
+```
+ Wix Velo                    FastAPI /v1/upscale
+ ────────                    ──────────────────
+ spend(clientRef) ──────────▶ HMAC verify → create job → enqueue
+ ◀──── 202 {job_id}           Worker: upscale per ratio → save
+ poll ──────────────────────▶ status + upscaled_url[]
+```
+
+Same idempotency and backpressure guarantees as `/v1/media-kit`.
+""",
 )
 async def submit_upscale(
     req: UpscaleRequest,
