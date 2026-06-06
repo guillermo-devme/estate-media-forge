@@ -10,7 +10,8 @@ wix-site/
 │   ├── lib/
 │   │   ├── falClient.js     internal: HMAC-signed fetch to FastAPI
 │   │   ├── wallet.js        internal: balance + per-member lock + grant/spend/refund
-│   │   └── roles.js         internal: role → service permission matrix
+│   │   ├── roles.js         internal: role → service permission matrix
+│   │   └── mediaUpload.js   internal: persist fal outputs to Wix Media Manager
 │   ├── quotation.web.js     web method: getQuote (no spend)
 │   ├── media.web.js         web methods: submitUpscale/ImageToVideo/MediaKit + getJobStatus
 │   ├── wallet.web.js        web methods: getWallet + adminAdjust
@@ -31,6 +32,31 @@ wix-site/
 4. Open the page that hosts your generator UI, open its code panel, and paste the relevant parts of
    `pages/Generator.example.js` (rename element IDs to match your design).
 5. Create the CMS collections, roles, and Secrets per `../wix-integration/SETUP.md`.
+
+### CMS Collections required
+
+| Collection | Permissions | Purpose |
+|---|---|---|
+| `TokenWallets` | Admin-only | Balance per member |
+| `TokenTransactions` | Admin-only | Idempotent tx log (grant/spend/refund) |
+| `TokenLocks` | Admin-only | Per-member mutex |
+| `Jobs` | Admin-only | Job ownership (member → job_id) |
+| `PendingSubmits` | Admin-only | Ambiguous-submit reconciliation intents |
+| `MemberMedia` | Admin-only | Persisted Wix Media Manager URLs per job/ratio |
+
+### MemberMedia fields
+
+| Field | Type | Description |
+|---|---|---|
+| `memberId` | Text (indexed) | Owning member |
+| `jobId` | Text (indexed) | FastAPI job ID |
+| `aspectRatio` | Text | "1:1", "9:16", or "16:9" |
+| `mediaType` | Text | "image" or "video" |
+| `stage` | Text | "upscaled", "expanded", or "video" |
+| `sourceUrl` | URL | Original fal CDN URL (debug/audit) |
+| `wixMediaUrl` | URL | Permanent wixstatic.com URL |
+| `fileId` | Text | Wix Media Manager file ID |
+| `createdDate` | Date | Import timestamp |
 
 ## Security notes (do not skip)
 

@@ -10,7 +10,7 @@
  */
 import { getWallet } from 'backend/wallet.web.js';
 import { getQuote } from 'backend/quotation.web.js';
-import { submitMediaKit, getJobStatus } from 'backend/media.web.js';
+import { submitMediaKit, getJobStatus, getMyMedia } from 'backend/media.web.js';
 import { formatAllowance, shortByMessage } from 'public/credits.js';
 
 let currentJobId = null;
@@ -77,7 +77,13 @@ function startPolling() {
       $w('#statusText').text = `Status: ${s.status}`;
       if (['completed', 'partial', 'failed'].includes(s.status)) {
         clearInterval(pollTimer);
-        renderAssets(s.assets || []);
+        // Use the permanent Wix Media URLs if available (persisted on terminal status).
+        // Falls back to the original fal URLs (short-lived) for assets not yet imported.
+        if (s.media && s.media.length) {
+          renderPersistedMedia(s.media);
+        } else {
+          renderAssets(s.assets || []);
+        }
         if (s.status === 'failed') await refreshWallet(); // refund landed
       }
     } catch (e) {
@@ -95,5 +101,25 @@ function renderAssets(assets) {
     videoUrl: a.video_url,
     imageUrl: a.expanded_url || a.upscaled_url,
     status: a.status,
+  }));
+}
+
+/**
+ * Render persisted Wix Media URLs (permanent wixstatic.com links).
+ * These survive indefinitely, unlike the fal CDN URLs which expire.
+ */
+function renderPersistedMedia(media) {
+  // Group by aspect ratio; prefer video stage for the video slot, image for the thumbnail.
+  const byRatio = {};
+  for (const m of media) {
+    if (!byRatio[m.aspectRatio]) byRatio[m.aspectRatio] = {};
+    byRatio[m.aspectRatio][m.stage] = m.wixMediaUrl;
+  }
+  $w('#assetsRepeater').data = Object.entries(byRatio).map(([ratio, urls]) => ({
+    _id: ratio,
+    ratio,
+    videoUrl: urls.video || null,
+    imageUrl: urls.expanded || urls.upscaled || null,
+    status: 'completed',
   }));
 }

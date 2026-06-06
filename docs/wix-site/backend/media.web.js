@@ -22,6 +22,7 @@ import crypto from 'crypto';
 import { assertRole } from 'backend/lib/roles.js';
 import { spend, refund, getBalance, InsufficientCredits } from 'backend/lib/wallet.js';
 import { callFastApi, getFastApi } from 'backend/lib/falClient.js';
+import { persistJobAssets, getJobMedia } from 'backend/lib/mediaUpload.js';
 
 const OPTS = { suppressAuth: true, suppressHooks: true };
 
@@ -137,6 +138,12 @@ async function reconcileSubmit(memberId, primaryRole, clientRef) {
 }
 export { reconcileSubmit };
 
+/** Retrieve all persisted Wix Media URLs for a member's job (no FastAPI call needed). */
+export const getMyMedia = webMethod(Permissions.SiteMember, async (jobId) => {
+  const { memberId } = await memberContext();
+  return getJobMedia(memberId, jobId);
+});
+
 export const submitUpscale = webMethod(Permissions.SiteMember, (params) =>
   submit('upscale', '/v1/upscale', params));
 
@@ -146,15 +153,32 @@ export const submitImageToVideo = webMethod(Permissions.SiteMember, (params) =>
 export const submitMediaKit = webMethod(Permissions.SiteMember, (params) =>
   submit('media_kit', '/v1/media-kit', params));
 
-/** Poll job status — verifies the job belongs to the calling member. */
+/** Poll job status — verifies the job belongs to the calling member.
+ *  On terminal status (completed/partial), persists fal assets to Wix Media Manager
+ *  so the member gets permanent wixstatic.com URLs (fal URLs are ephemeral).
+ */
 export const getJobStatus = webMethod(Permissions.SiteMember, async (jobId) => {
   const { memberId, primaryRole } = await memberContext();
   const owned = await wixData.get('Jobs', jobId, OPTS).catch(() => null);
   if (!owned || owned.memberId !== memberId) { const e = new Error('Not found'); e.code = 404; throw e; }
   const status = await getFastApi(`/v1/jobs/${jobId}`, memberId, primaryRole);
+
   // keep the ownership row roughly in sync
   if (status.status && status.status !== owned.status) {
     await wixData.update('Jobs', { ...owned, status: status.status }, OPTS).catch(() => {});
   }
-  return status;
+
+  // On terminal state: persist fal outputs to Wix Media Manager (idempotent).
+  // The member then has permanent wixstatic.com URLs in the MemberMedia collection.
+  let media = null;
+  if (['completed', 'partial'].includes(status.status) && status.assets && status.assets.length) {
+    try {
+      media = await persistJobAssets(memberId, jobId, status.assets);
+    } catch (err) {
+      // Non-fatal: the fal URLs still work short-term; log and return them as-is.
+      console.error('[getJobStatus] media persistence failed:', err.message);
+    }
+  }
+
+  return { ...status, media };
 });
