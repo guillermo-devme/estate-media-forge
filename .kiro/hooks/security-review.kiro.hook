@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Security review on save",
+  "description": "Review changed application code for common vulnerability classes before it lands.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/routers/**/*.py",
+      "**/providers/**/*.py",
+      "**/deps.py",
+      "**/jobs/**/*.py",
+      "wix-site/backend/**/*.js"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Review the changed code against .kiro/steering/security.md. If the Semgrep MCP is available, run a security scan on the file; otherwise reason through it. Check for: missing/incorrect auth (HMAC verification, member-ownership, role gating), broken idempotency on money operations, SSRF on user-supplied URLs, injection, unsafe deserialization, secrets in code/logs, leaking USD/internal cost to clients, unbounded external calls (missing timeout/retry/semaphore), and stack traces sent to clients. Report concrete findings with file:line and a fix. Approve only if clean."
+  }
+}

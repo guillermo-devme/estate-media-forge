@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Dependency & supply-chain audit",
+  "description": "When a dependency manifest or lockfile changes, verify package legitimacy and run a security audit before the change is trusted.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/pyproject.toml",
+      "**/requirements*.txt",
+      "**/uv.lock",
+      "**/package.json",
+      "**/package-lock.json"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A dependency manifest/lockfile changed. Follow .kiro/steering/dependency-safety.md: 1) For each ADDED or version-changed package, confirm the exact canonical name on the official index and that it is NOT a typosquat, malicious, or deprecated package (flag anything suspicious). 2) Run the appropriate audit: Python -> `pip-audit` (and `safety check` if available); Node -> `npm audit --omit=dev`. 3) Confirm versions are pinned and the lockfile is committed. 4) Report findings; block (do not approve) on any critical/high vuln or unverified package, and propose a safe alternative or patched version."
+  }
+}

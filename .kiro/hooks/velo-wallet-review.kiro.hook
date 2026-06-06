@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Velo wallet & web-method review",
+  "description": "When Wix backend code changes, verify auth, role gating, balance integrity, and idempotency.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "wix-site/backend/**/*.js"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A Wix/Velo backend file changed. Check against .kiro/steering/velo-wix.md and security.md: 1) Web methods resolve currentMember and assertRole BEFORE any side effect; anonymous is rejected. 2) Only lib/wallet.js mutates balance, always inside the per-member lock; tx _id idempotency is intact (stripe_/spend_/refund_/adjust_). 3) Stripe webhook verifies the Stripe signature; falRefund verifies service-key + HMAC before acting. 4) elevate/suppressAuth scope is minimal and no unauthenticated path can spend or read another member's data. 5) No hardcoded secrets (use getSecret). 6) A member cannot act on another member's _id. Report findings with fixes; approve only if clean."
+  }
+}

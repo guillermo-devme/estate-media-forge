@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Python tests & lint on save",
+  "description": "When a Python source or test file changes, run ruff and the relevant pytest tests, then fix any failures following our conventions.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.py"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A Python file was just saved. 1) Run `ruff check` and `ruff format --check` on the changed file(s) and fix lint/format issues. 2) Identify and run the pytest tests covering the changed module (and add a test if a new function/branch lacks coverage, per .kiro/steering/testing.md). 3) If anything fails, fix it and re-run until green. Do not weaken assertions to pass. Report a one-line summary of what ran and the result."
+  }
+}
